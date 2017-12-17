@@ -2,21 +2,19 @@
 title: 'Coursera: Prediction Assignment Writeup'
 author: "Cousera"
 date: "Dezember 2017"
-output: html_document
+output: 
+  html_document: 
+    keep_md: yes
 ---
-
-```{r}
-l_path <- "C:/Users/Paul/Desktop/coursera/data science/Course Certificate for Machine Learning/Week4"
-setwd( l_path )
-```
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r echo=FALSE}
-## install.packages( devtools )
-library( "devtools" )
+```{r include=FALSE}
+
+## install.packages( "devtools" )
+library( devtools )
 ## devtools::install_github("tidyverse/dplyr")
 library( tidyverse )
 
@@ -58,12 +56,24 @@ library( freqparcoord )
 
 ## install.packages( rattle )
 library( rattle )
-
 ```
+
+```{r include=FALSE}
+## Functions:
+## 
+normal_data <- function( my_modFit ) {
+## Normalization
+   l_min <- summary(my_modFit)[1]; l_max <- summary(my_modFit)[6]
+   pr_modFit <- 1 - ( ( l_max - my_modFit ) / ( l_max - l_min ) )
+## Rückgabe   
+   round( pr_modFit, digits = 4 )
+}
+```
+
 
 ## Executive Summary
 
-The report explore die relationship between some variables of data frm acelerometers on the belt, forearm, and dumbell of 6 participants. The goal is to predict the "classe" variable. For the prediction of the 20 predefined test data sets the method Support Vector Machine is used.
+The report explore die relationship between some variables of data from acelerometers on the belt, forearm, and dumbell of 6 participants. The goal is to predict the "classe" variable. For the prediction of the 20 predefined test data sets the method Support Vector Machine is used and delivers good results.
 
 
 ## Data Preparation und Data Expoloration
@@ -153,8 +163,9 @@ Here is an overview of the correlations of the explanatory variables and the tar
 
 ```{r}
 ## correlations
-abs( cor( x=my_train[,-c(1,2,5,6,60:65)], y=my_train[,c(61,62,63,64,65)] ) )
+cor_all <- abs( round( cor( x=my_train[,-c(1,2,5,6,60:65)], y=my_train[,c(61,62,63,64,65)] ), digits=4 ) )
 ```
+
 
 #### Data for Training, Valuation and Test
 
@@ -173,12 +184,12 @@ paste0( "test data       : ", dim(my_test)[1], " observations / ", dim(my_test)[
 
 #### cross validation
 
-The training data is divided into 5 subsets.
+The training data is divided into 3 subsets.
 
 ```{r echo=FALSE}
 set.seed(32323)
 ## folder counts
-c_k <- 5
+c_k <- 3
 ## create folders
 folds <- caret::createFolds( y=my_training$classe, k=c_k, list=FALSE, returnTrain=FALSE )
 ```
@@ -190,221 +201,231 @@ table( as.factor( folds ) )
 
 #### Classification of variable "classe_A"
 
+The classification of the target variables "classe" or "classe_A", "classe_B", "classe_C", "classe_D" and "classe_E" is made by using the method Support Vector Machine. That Each expression of the characteristic "classe" is classified by a separate column. The new columns are created as numeric values. The larger the value, the more likely the classification to the "classe" and the smaller the less likely.
 
-
+The function "tune.svm" allows the implicit use of a cross validation.
 
 ```{r}
 l_exp <- my_train[ , c( 7:59, 61 )]
 tune.resA <- tune.svm( classe_A ~ . , data = l_exp,
-                       tunecontrol = tune.control( cross=2 ) )
+                       tunecontrol = tune.control( cross=c_k ) )
 svmfitA <- tune.resA$best.model
-## table( l_exp$classe_A, predict(svmfitA) )
 ```
 
 ```{r}
 VmodfitA <- predict( svmfitA, newdata=my_validation, se.fit = TRUE, interval = "confidence" )
+## Normalization
+pr_VmodFitA <- normal_data( my_modFit=VmodfitA )
 ```
 
 ```{r}
-paste("Validation: residuals for classe_A:")
-summary(svmfitA$residuals)
-```
-
-```{r}
-## caret::confusionMatrix( data=my_validation$classe_A, VmodfitA )
+## paste("Validation: residuals for classe_A:")
+sum_svmfit <- summary(svmfitA$residuals)
 ```
 
 ```{r}
 ## predict test data
 TmodFitA <- predict( svmfitA, newdata=my_test, se.fit = TRUE, interval = "confidence" )
 ## Normalization
-l_min <- summary(TmodFitA)[1]; l_max <- summary(TmodFitA)[6]
-pr_TmodFitA <- 1 - ( ( l_max - TmodFitA ) / ( l_max - l_min ) )
-pr_TmodFitA
+pr_TmodFitA <- normal_data( my_modFit=TmodFitA )
+pr_TmodFitA 
 ```
 
 
 #### Classification of variable "classe_B"
 
-in Analogie zu classe_A
+Analogous to the classification of the variable "classe_A".
 
 ```{r echo=FALSE}
 l_exp <- my_train[ , c( 7:59, 62 )]
 tune.resB <- tune.svm( classe_B ~ . , data = l_exp, kernel="radial",
-                       tunecontrol = tune.control(cross=3) )
+                       tunecontrol = tune.control(cross=c_k) )
 svmfitB <- tune.resB$best.model
-table( l_exp$classe_B, predict(svmfitB) )
 ```
 
-```{r}
+```{r include=FALSE}
 VmodfitB <- predict( svmfitB, newdata=my_validation, se.fit = TRUE, interval = "confidence" )
+## Normalization
+pr_VmodFitB <- normal_data( my_modFit=VmodfitB )
 ```
 
-```{r}
-paste("Residuals for classe_B:")
-summary(svmfitB$residuals)
+```{r include=FALSE}
+## paste("Validation: residuals for classe_B:")
+sum_svmfit <- rbind( sum_svmfit, summary(svmfitB$residuals) )
 ```
 
-```{r}
-## caret::confusionMatrix( data=my_validation$classe_B, VmodfitB )
-```
-
-```{r}
+```{r echo=FALSE}
 ## predict test data
 TmodFitB <- predict( svmfitB, newdata=my_test, se.fit = TRUE, interval = "confidence" )
 ## Normalization
-l_min <- summary(TmodFitB)[1]; l_max <- summary(TmodFitB)[6]
-pr_TmodFitB <- 1 - ( ( l_max - TmodFitB ) / ( l_max - l_min ) )
+pr_TmodFitB <- normal_data( my_modFit=TmodFitB )
 ```
-
 
 
 #### Classification of variable "classe_C"
 
+Analogous to the classification of the variable "classe_A".
 
-
-```{r}
+```{r echo=FALSE}
 l_exp <- my_train[ , c( 7:59, 63 )]
 tune.resC <- tune.svm( classe_C ~ . , data = l_exp, kernel="radial",
-                       tunecontrol = tune.control(cross=3) )
+                       tunecontrol = tune.control(cross=c_k) )
 svmfitC <- tune.resC$best.model
-## table( l_exp$classe_C, predict(svmfitC) )
 ```
 
-```{r}
+```{r include=FALSE}
 VmodfitC <- predict( svmfitC, newdata=my_validation, se.fit = TRUE, interval = "confidence" )
+## Normalization
+pr_VmodFitC <- normal_data( my_modFit=VmodfitC )
 ```
 
-```{r}
-paste("Residuals for classe_C:")
-summary(svmfitC$residuals)
+```{r include=FALSE}
+## paste("Validation: residuals for classe_C:")
+sum_svmfit <- rbind( sum_svmfit, summary(svmfitC$residuals) )
 ```
 
-```{r}
-## caret::confusionMatrix( data=my_validation$classe_C, VmodfitC )
-```
-
-```{r}
+```{r echo=FALSE}
 ## predict test data
 TmodFitC <- predict( svmfitC, newdata=my_test, se.fit = TRUE, interval = "confidence" )
 ## Normalization
-l_min <- summary(TmodFitC)[1]; l_max <- summary(TmodFitA)[6]
-pr_TmodFitC <- 1 - ( ( l_max - TmodFitC ) / ( l_max - l_min ) )
+pr_TmodFitC <- normal_data( my_modFit=TmodFitC )
 ```
-
-
 
 
 #### Classification of variable "classe_D"
 
+Analogous to the classification of the variable "classe_A".
 
-
-```{r}
+```{r echo=FALSE}
 l_exp <- my_train[ , c( 7:59, 64 )]
 tune.resD <- tune.svm( classe_D ~ . , data = l_exp, kernel="radial",
-                       tunecontrol = tune.control(cross=3) )
+                       tunecontrol = tune.control(cross=c_k) )
 svmfitD <- tune.resD$best.model
 ## table( l_exp$classe_D, predict(svmfitD) )
 ```
 
-```{r}
+```{r include=FALSE}
 VmodfitD <- predict( svmfitD, newdata=my_validation, se.fit = TRUE, interval = "confidence" )
+## Normalization
+pr_VmodFitD <- normal_data( my_modFit=VmodfitD )
 ```
 
-```{r}
-paste( "Residuals for classe_D:" ) 
-summary(svmfitD$residuals)
+```{r include=FALSE}
+## paste("Validation: residuals for classe_D:")
+sum_svmfit <- rbind( sum_svmfit, summary(svmfitD$residuals) )
 ```
 
-```{r}
-## caret::confusionMatrix( data=my_validation$classe_D, VmodfitD )
-```
-
-```{r}
+```{r echo=FALSE}
 ## predict test data
 TmodFitD <- predict( svmfitD, newdata=my_test, se.fit = TRUE, interval = "confidence" )
 ## Normalization
-l_min <- summary(TmodFitD)[1]; l_max <- summary(TmodFitD)[6]
-pr_TmodFitD <- 1 - ( ( l_max - TmodFitD ) / ( l_max - l_min ) )
+pr_TmodFitD <- normal_data( my_modFit=TmodFitD )
 ```
-
-
 
 
 #### Classification of variable "classe_E"
 
+Analogous to the classification of the variable "classe_A".
 
-
-```{r}
+```{r echo=FALSE}
 l_exp <- my_train[ , c( 7:59, 65 )]
 tune.resE <- tune.svm( classe_E ~ . , data = l_exp, kernel="radial",
-                       tunecontrol = tune.control(cross=3) )
+                       tunecontrol = tune.control(cross=c_k) )
 svmfitE <- tune.resE$best.model
-## table( l_exp$classe_E, predict(svmfitE) )
 ```
 
-```{r}
+```{r include=FALSE}
 VmodfitE <- predict( svmfitE, newdata=my_validation, se.fit = TRUE, interval = "confidence" )
+## Normalization
+pr_VmodFitE <- normal_data( my_modFit=VmodfitE )
 ```
 
-```{r}
-paste("Residuals for classe_E:")
-summary(svmfitE$residuals)
+```{r include=FALSE}
+## paste("Validation: residuals for classe_E:")
+sum_svmfit <- rbind( sum_svmfit, summary(svmfitE$residuals) )
 ```
 
-```{r}
-## caret::confusionMatrix( data=my_validation$classe_E, VmodfitE )
-```
-
-```{r}
+```{r echo=FALSE}
 ## predict test data
 TmodFitE <- predict( svmfitE, newdata=my_test, se.fit = TRUE, interval = "confidence" )
 ## Normalization
-l_min <- summary(TmodFitE)[1]; l_max <- summary(TmodFitE)[6]
-pr_TmodFitE <- 1 - ( ( l_max - TmodFitA ) / ( l_max - l_min ) )
+pr_TmodFitE <- normal_data( my_modFit=TmodFitE )
 ```
-
 
 
 ## Interpretation
 
-
 #### Apply ml-algorithm to validation cases
 
+Using the Confusion matrix, the quality of the classification is calculated on the validation data.
+
+
 ```{r}
-## modelFitVal <- predict( svmFit_A, newdata=my_valuating, se.fit = TRUE, interval = "confidence" )
-## caret::confusionMatrix( data=my_valuating$classe_A, modelFitVal )
+table( as.factor( my_validation$classe ) )
 ```
 
 ```{r}
-table( as.factor( my_valuating$classe ) )
+paste("Validation: residuals:")
+dimnames(sum_svmfit)[[1]] <- c( "classe_A", "classe_B", "classe_C", "classe_D", "classe_E" )
+print( sum_svmfit )
 ```
 
-
-
-
-
-
-
-
-
-#### Apply ml-algorithm to 20 test cases
-
-
-
-```{r}
-l_view_Fit <- cbind( pr_TmodFitA, pr_TmodFitB, pr_TmodFitC, pr_TmodFitD, pr_TmodFitE )
+```{r echo=FALSE}
+l_view_VFit <- cbind( pr_VmodFitA, pr_VmodFitB, pr_VmodFitC, pr_VmodFitD, pr_VmodFitE )
+l_view_VFit <- round( l_view_VFit, digits=3 )
 ```
 
-```{r}
-for ( i in 1:20 ) {
-  which( max( l_view_Fit[i,] ) )
+```{r echo=FALSE}
+k <- nrow( l_view_VFit )
+Vclasse <- vector()
+Vprob   <- vector()
+for ( i in 1:k ) {
+  k <- which.max( l_view_VFit[i,] )
+  if ( k == 1 ) { Vclasse[i] <- "A" }
+  if ( k == 2 ) { Vclasse[i] <- "B" }
+  if ( k == 3 ) { Vclasse[i] <- "C" }
+  if ( k == 4 ) { Vclasse[i] <- "D" }
+  if ( k == 5 ) { Vclasse[i] <- "E" }
+  Vprob[i] <- round( l_view_VFit[i,k] / sum(as.numeric(l_view_VFit[i,])), digits=2 )
 }  
 ```
 
-
 ```{r}
-print( round( l_view_Fit, digits=3 ) )
+caret::confusionMatrix( data=my_validation$classe, Vclasse )
 ```
 
+The key figures Accuracy and Kappa as well as Sensitivity and Specificity are very high for the validation data, so that the classification can run on the test data.
 
+
+#### Apply ML-algorithm to 20 test cases
+
+The classification of the expression of the "classe" takes place, in which the largest value within a row is determined from the 5 values (majority vote). Based on the magnitude, the reader can immediately see how stable or uncertain the classification is. The larger a value stands out, the more stable the classification. The more equally distributed the values within a row, the more uncertain the assignment.
+
+```{r}
+l_view_Fit <- cbind( pr_TmodFitA, pr_TmodFitB, pr_TmodFitC, pr_TmodFitD, pr_TmodFitE )
+l_view_Fit <- round( l_view_Fit, digits=3 )
+```
+
+```{r echo=FALSE}
+k <- nrow(l_view_Fit)
+classe <- vector()
+prob   <- vector()
+for ( i in 1:k ) {
+  k <- which.max( l_view_Fit[i,] )
+  if ( k == 1 ) { classe[i] <- "A" }
+  if ( k == 2 ) { classe[i] <- "B" }
+  if ( k == 3 ) { classe[i] <- "C" }
+  if ( k == 4 ) { classe[i] <- "D" }
+  if ( k == 5 ) { classe[i] <- "E" }
+  prob[i] <- round( l_view_Fit[i,k] / sum(as.numeric(l_view_Fit[i,])), digits=2 )
+}  
+l_view_Fit <- cbind( l_view_Fit, replicate( k, "->" ), classe, prob )
+colnames(l_view_Fit) <- c("classe A", "classe B", "classe C", "classe D", "classe E", "   ", "classe", "with stability" )
+```
+
+```{r}
+print( l_view_Fit, digits=3 )
+```
+
+Notice:
+The assignment of the test case 3) is faulty, but the stability is with the value 0.37 rather small.
