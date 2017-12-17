@@ -1,0 +1,410 @@
+---
+title: 'Coursera: Prediction Assignment Writeup'
+author: "Cousera"
+date: "Dezember 2017"
+output: html_document
+---
+
+```{r}
+l_path <- "C:/Users/Paul/Desktop/coursera/data science/Course Certificate for Machine Learning/Week4"
+setwd( l_path )
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r echo=FALSE}
+## install.packages( devtools )
+library( "devtools" )
+## devtools::install_github("tidyverse/dplyr")
+library( tidyverse )
+
+## install.packages( magrittr )
+library( magrittr )
+
+## install.packages( lubridate )
+library( lubridate )
+
+## install.packages( ggplot2 )
+library( ggplot2 )
+
+## install.packages( caret )
+library( caret )
+
+## install.packages( kernlab )
+library( kernlab )
+
+## install.packages( raster )
+library( raster )
+
+## install.packages( e1071 )
+library( e1071 )
+
+## install.packages( Metrics )
+library( Metrics )
+
+## install.packages( Hmisc )
+library( Hmisc )
+
+## install.packages( AppliedPredictiveModeling )
+library( AppliedPredictiveModeling )
+
+## install.packages( MASS )
+library( MASS )
+
+## install.packages( freqparcoord )
+library( freqparcoord )
+
+## install.packages( rattle )
+library( rattle )
+
+```
+
+## Executive Summary
+
+The report explore die relationship between some variables of data frm acelerometers on the belt, forearm, and dumbell of 6 participants. The goal is to predict the "classe" variable. For the prediction of the 20 predefined test data sets the method Support Vector Machine is used.
+
+
+## Data Preparation und Data Expoloration
+
+#### Data Source
+
+More Information about the accelerometer data is available from the website:
+http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har 
+
+Training data: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+Test data: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The files should be made available in the current directory.
+
+```{r echo=FALSE}
+## read data
+## training data
+l_file_train <- "pml-training.csv"
+training <- read.csv( l_file_train )
+paste0( "size of ", l_file_train, " : ", nrow(training) )
+## test data
+l_file_test <- "pml-testing.csv"
+testing <- read.csv( l_file_test )
+paste0( "size of ", l_file_test, "  : ", nrow(testing) )
+```
+
+
+#### Data Preparation
+
+First, the columns with missing data are eliminated.
+
+```{r echo=FALSE}
+## select columns
+k <- 0; l_col_sel <- as.vector(NA)
+for ( i in 1:ncol(testing) ) {
+  if ( ( sum( is.na( training[,i] ) ) > 0.75 * nrow(training) ) || ( sum( is.na( testing[,i] ) ) > 0.75 * nrow(testing) ) ) { 
+  } else {
+    k <- k + 1
+    l_col_sel[k] <- i
+  }
+}
+```
+
+```{r}
+## select columns without missing values
+my_train <- dplyr::select( training, l_col_sel ) 
+my_test  <- dplyr::select( testing,  l_col_sel )
+
+## names of selected columns
+paste("Explanary Variables:")
+paste("--------------------")
+names(my_train)
+```
+
+The target variable "classe" is decomposed into 5 new numerical variables "classe_A", "classe_B", "classe_C", "classe_D" and "classe_E" for the prediction of the classification.
+
+```{r}
+## Target variables
+my_train <- dplyr::mutate( my_train, classe_A = 0,
+                                     classe_B = 0,
+                                     classe_C = 0,
+                                     classe_D = 0,
+                                     classe_E = 0 )
+
+my_train[ which( my_train$classe == "A") , ]$classe_A <- 1
+my_train[ which( my_train$classe == "B") , ]$classe_B <- 1
+my_train[ which( my_train$classe == "C") , ]$classe_C <- 1
+my_train[ which( my_train$classe == "D") , ]$classe_D <- 1
+my_train[ which( my_train$classe == "E") , ]$classe_E <- 1
+```
+
+
+#### Data Exploration
+
+#### Parallel coordinates of explanary variables
+
+By way of illustration, the explanatory variables are represented in a diagram of parallel coordinates.
+
+```{r fig.height=8, fig.width=12}
+freqparcoord::freqparcoord( x=my_train[ , c( 7:59 )] ,m=30, k=20, faceting="classe" )
+```
+
+#### Correlationen
+
+Here is an overview of the correlations of the explanatory variables and the target variables:
+
+```{r}
+## correlations
+abs( cor( x=my_train[,-c(1,2,5,6,60:65)], y=my_train[,c(61,62,63,64,65)] ) )
+```
+
+#### Data for Training, Valuation and Test
+
+```{r echo=FALSE}
+inTrain <- createDataPartition( y=my_train$classe, p=0.75, list=FALSE )
+my_training <- my_train[inTrain,]
+my_validation <- my_train[-inTrain,]
+paste0( "training data   : ", dim(my_training)[1], " observations / ", dim(my_training)[2], " variables" )
+paste0( "validation data : ", dim(my_validation)[1], " observations / ", dim(my_validation)[2], " variables" )
+paste0( "test data       : ", dim(my_test)[1], " observations / ", dim(my_test)[2], " variables" )
+```
+
+
+## Modeling
+
+
+#### cross validation
+
+The training data is divided into 5 subsets.
+
+```{r echo=FALSE}
+set.seed(32323)
+## folder counts
+c_k <- 5
+## create folders
+folds <- caret::createFolds( y=my_training$classe, k=c_k, list=FALSE, returnTrain=FALSE )
+```
+
+```{r echo=FALSE}
+paste0("Size of ", c_k, "-folder subsets:")
+table( as.factor( folds ) )
+```
+
+#### Classification of variable "classe_A"
+
+
+
+
+```{r}
+l_exp <- my_train[ , c( 7:59, 61 )]
+tune.resA <- tune.svm( classe_A ~ . , data = l_exp,
+                       tunecontrol = tune.control( cross=2 ) )
+svmfitA <- tune.resA$best.model
+## table( l_exp$classe_A, predict(svmfitA) )
+```
+
+```{r}
+VmodfitA <- predict( svmfitA, newdata=my_validation, se.fit = TRUE, interval = "confidence" )
+```
+
+```{r}
+paste("Validation: residuals for classe_A:")
+summary(svmfitA$residuals)
+```
+
+```{r}
+## caret::confusionMatrix( data=my_validation$classe_A, VmodfitA )
+```
+
+```{r}
+## predict test data
+TmodFitA <- predict( svmfitA, newdata=my_test, se.fit = TRUE, interval = "confidence" )
+## Normalization
+l_min <- summary(TmodFitA)[1]; l_max <- summary(TmodFitA)[6]
+pr_TmodFitA <- 1 - ( ( l_max - TmodFitA ) / ( l_max - l_min ) )
+pr_TmodFitA
+```
+
+
+#### Classification of variable "classe_B"
+
+in Analogie zu classe_A
+
+```{r echo=FALSE}
+l_exp <- my_train[ , c( 7:59, 62 )]
+tune.resB <- tune.svm( classe_B ~ . , data = l_exp, kernel="radial",
+                       tunecontrol = tune.control(cross=3) )
+svmfitB <- tune.resB$best.model
+table( l_exp$classe_B, predict(svmfitB) )
+```
+
+```{r}
+VmodfitB <- predict( svmfitB, newdata=my_validation, se.fit = TRUE, interval = "confidence" )
+```
+
+```{r}
+paste("Residuals for classe_B:")
+summary(svmfitB$residuals)
+```
+
+```{r}
+## caret::confusionMatrix( data=my_validation$classe_B, VmodfitB )
+```
+
+```{r}
+## predict test data
+TmodFitB <- predict( svmfitB, newdata=my_test, se.fit = TRUE, interval = "confidence" )
+## Normalization
+l_min <- summary(TmodFitB)[1]; l_max <- summary(TmodFitB)[6]
+pr_TmodFitB <- 1 - ( ( l_max - TmodFitB ) / ( l_max - l_min ) )
+```
+
+
+
+#### Classification of variable "classe_C"
+
+
+
+```{r}
+l_exp <- my_train[ , c( 7:59, 63 )]
+tune.resC <- tune.svm( classe_C ~ . , data = l_exp, kernel="radial",
+                       tunecontrol = tune.control(cross=3) )
+svmfitC <- tune.resC$best.model
+## table( l_exp$classe_C, predict(svmfitC) )
+```
+
+```{r}
+VmodfitC <- predict( svmfitC, newdata=my_validation, se.fit = TRUE, interval = "confidence" )
+```
+
+```{r}
+paste("Residuals for classe_C:")
+summary(svmfitC$residuals)
+```
+
+```{r}
+## caret::confusionMatrix( data=my_validation$classe_C, VmodfitC )
+```
+
+```{r}
+## predict test data
+TmodFitC <- predict( svmfitC, newdata=my_test, se.fit = TRUE, interval = "confidence" )
+## Normalization
+l_min <- summary(TmodFitC)[1]; l_max <- summary(TmodFitA)[6]
+pr_TmodFitC <- 1 - ( ( l_max - TmodFitC ) / ( l_max - l_min ) )
+```
+
+
+
+
+#### Classification of variable "classe_D"
+
+
+
+```{r}
+l_exp <- my_train[ , c( 7:59, 64 )]
+tune.resD <- tune.svm( classe_D ~ . , data = l_exp, kernel="radial",
+                       tunecontrol = tune.control(cross=3) )
+svmfitD <- tune.resD$best.model
+## table( l_exp$classe_D, predict(svmfitD) )
+```
+
+```{r}
+VmodfitD <- predict( svmfitD, newdata=my_validation, se.fit = TRUE, interval = "confidence" )
+```
+
+```{r}
+paste( "Residuals for classe_D:" ) 
+summary(svmfitD$residuals)
+```
+
+```{r}
+## caret::confusionMatrix( data=my_validation$classe_D, VmodfitD )
+```
+
+```{r}
+## predict test data
+TmodFitD <- predict( svmfitD, newdata=my_test, se.fit = TRUE, interval = "confidence" )
+## Normalization
+l_min <- summary(TmodFitD)[1]; l_max <- summary(TmodFitD)[6]
+pr_TmodFitD <- 1 - ( ( l_max - TmodFitD ) / ( l_max - l_min ) )
+```
+
+
+
+
+#### Classification of variable "classe_E"
+
+
+
+```{r}
+l_exp <- my_train[ , c( 7:59, 65 )]
+tune.resE <- tune.svm( classe_E ~ . , data = l_exp, kernel="radial",
+                       tunecontrol = tune.control(cross=3) )
+svmfitE <- tune.resE$best.model
+## table( l_exp$classe_E, predict(svmfitE) )
+```
+
+```{r}
+VmodfitE <- predict( svmfitE, newdata=my_validation, se.fit = TRUE, interval = "confidence" )
+```
+
+```{r}
+paste("Residuals for classe_E:")
+summary(svmfitE$residuals)
+```
+
+```{r}
+## caret::confusionMatrix( data=my_validation$classe_E, VmodfitE )
+```
+
+```{r}
+## predict test data
+TmodFitE <- predict( svmfitE, newdata=my_test, se.fit = TRUE, interval = "confidence" )
+## Normalization
+l_min <- summary(TmodFitE)[1]; l_max <- summary(TmodFitE)[6]
+pr_TmodFitE <- 1 - ( ( l_max - TmodFitA ) / ( l_max - l_min ) )
+```
+
+
+
+## Interpretation
+
+
+#### Apply ml-algorithm to validation cases
+
+```{r}
+## modelFitVal <- predict( svmFit_A, newdata=my_valuating, se.fit = TRUE, interval = "confidence" )
+## caret::confusionMatrix( data=my_valuating$classe_A, modelFitVal )
+```
+
+```{r}
+table( as.factor( my_valuating$classe ) )
+```
+
+
+
+
+
+
+
+
+
+#### Apply ml-algorithm to 20 test cases
+
+
+
+```{r}
+l_view_Fit <- cbind( pr_TmodFitA, pr_TmodFitB, pr_TmodFitC, pr_TmodFitD, pr_TmodFitE )
+```
+
+```{r}
+for ( i in 1:20 ) {
+  which( max( l_view_Fit[i,] ) )
+}  
+```
+
+
+```{r}
+print( round( l_view_Fit, digits=3 ) )
+```
+
+
