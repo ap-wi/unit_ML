@@ -1,6 +1,6 @@
 ---
 title: 'Coursera: Prediction Assignment Writeup'
-author: "Cousera"
+author: "A. Paul"
 date: "Dezember 2017"
 output: 
   html_document: 
